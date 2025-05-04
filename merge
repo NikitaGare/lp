@@ -1,0 +1,154 @@
+#include <iostream>
+#ifdef _OPENMP
+#include <omp.h>
+#else
+#include <ctime> // fallback timer
+#endif
+#include <iomanip>  // For controlling decimal precision
+
+using namespace std;
+
+// Merge two halves of the array
+void merge(int *arr, int left, int mid, int right) {
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
+
+    int *L = new int[n1];
+    int *R = new int[n2];
+
+    for (int i = 0; i < n1; i++) {
+        L[i] = arr[left + i];
+    }
+    for (int i = 0; i < n2; i++) {
+        R[i] = arr[mid + 1 + i];
+    }
+
+    int i = 0, j = 0, k = left;
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j]) {
+            arr[k] = L[i];
+            i++;
+        } else {
+            arr[k] = R[j];
+            j++;
+        }
+        k++;
+    }
+
+    while (i < n1) {
+        arr[k] = L[i];
+        i++;
+        k++;
+    }
+
+    while (j < n2) {
+        arr[k] = R[j];
+        j++;
+        k++;
+    }
+
+    delete[] L;
+    delete[] R;
+}
+
+// Sequential merge sort
+void sequentialMergeSort(int *arr, int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+
+        sequentialMergeSort(arr, left, mid);
+        sequentialMergeSort(arr, mid + 1, right);
+
+        merge(arr, left, mid, right);
+    }
+}
+
+// Parallel merge sort using OpenMP
+void parallelMergeSort(int *arr, int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            parallelMergeSort(arr, left, mid);
+
+            #pragma omp section
+            parallelMergeSort(arr, mid + 1, right);
+        }
+
+        merge(arr, left, mid, right);
+    }
+}
+
+// Function to get the current time
+double getTime() {
+#ifdef _OPENMP
+    return omp_get_wtime();  // OpenMP timer
+#else
+    return static_cast<double>(clock()) / CLOCKS_PER_SEC;  // fallback timer
+#endif
+}
+
+// Function to print the time in a readable format
+void printTime(double time) {
+    if (time < 0.0001) {
+        cout << fixed << setprecision(8) << time * 1000000 << " microseconds" << endl;
+    } else if (time < 1) {
+        cout << fixed << setprecision(6) << time * 1000 << " milliseconds" << endl;
+    } else {
+        cout << fixed << setprecision(6) << time << " seconds" << endl;
+    }
+}
+
+int main() {
+    int n;
+    cout << "Enter total number of elements: ";
+    cin >> n;
+
+    int *arr = new int[n];
+    cout << "Enter elements: ";
+    for (int i = 0; i < n; i++) {
+        cin >> arr[i];
+    }
+
+    // Sequential sort
+    int *seq_arr = new int[n];
+    for (int i = 0; i < n; i++) {
+        seq_arr[i] = arr[i];
+    }
+
+    double start_time = getTime();
+    sequentialMergeSort(seq_arr, 0, n - 1);
+    double end_time = getTime();
+
+    cout << "\nSorted array (Sequential): ";
+    for (int i = 0; i < n; i++) {
+        cout << seq_arr[i] << " ";
+    }
+    cout << "\nTime taken by sequential algorithm: ";
+    printTime(end_time - start_time);
+
+    // Parallel sort
+    int *par_arr = new int[n];
+    for (int i = 0; i < n; i++) {
+        par_arr[i] = arr[i];
+    }
+
+    start_time = getTime();
+    parallelMergeSort(par_arr, 0, n - 1);
+    end_time = getTime();
+
+    cout << "\nSorted array (Parallel): ";
+    for (int i = 0; i < n; i++) {
+        cout << par_arr[i] << " ";
+    }
+    cout << "\nTime taken by parallel algorithm: ";
+    printTime(end_time - start_time);
+
+    delete[] arr;
+    delete[] seq_arr;
+    delete[] par_arr;
+
+    return 0;
+}
