@@ -1,0 +1,329 @@
+#cpp
+1. Check GPU Compatibility
+First, make sure you have an NVIDIA GPU that supports CUDA. You can check CUDA-enabled GPUs.
+
+2. Install NVIDIA Drivers
+If you haven’t already installed NVIDIA drivers, you need to download and install them for your GPU from the NVIDIA website.
+
+3. Install CUDA Toolkit
+The CUDA Toolkit includes the necessary libraries, compiler (nvcc), and other tools required for development.
+
+To install the CUDA toolkit:
+
+Go to the CUDA Toolkit page.
+
+Select the correct version of CUDA (make sure it's compatible with your GPU).
+
+Download the installer for Windows.
+
+Run the installer and follow the prompts.
+
+During the installation, ensure that CUDA Toolkit and Visual Studio integration (if you're using Visual Studio) are selected.
+
+Even though you are using Dev C++, Visual Studio integration is essential because the CUDA toolkit relies on MSVC for compilation.
+
+Add the following paths to the Environment Variables in Windows:
+
+CUDA Path: Add C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\vX.Y\bin to your system's PATH variable (replace X.Y with your CUDA version).
+
+CUDA Lib: Add C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\vX.Y\libnvvp to the PATH.
+
+Verify Installation: After installation, open a Command Prompt and run:
+
+bash
+Copy
+Edit
+nvcc --version
+This should display the CUDA version if installed correctly.
+
+4. Install Dev C++
+Download and install Dev C++ from here.
+
+After installation, you can start the Dev C++ IDE.
+
+5. Configure Dev C++ for CUDA
+Dev C++ does not come with built-in support for CUDA, so you will need to set it up manually to use CUDA:
+
+Open Dev C++ and go to Tools > Compiler Options.
+
+Add CUDA paths:
+
+Include directories: Go to the Directories tab and add the following:
+
+C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\vX.Y\include
+
+Library directories: In the Libraries tab, add the following:
+
+C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\vX.Y\lib\x64
+
+Set Compiler Flags:
+
+Go to Compiler > Settings > Compiler and add the following flags:
+
+-g -G -arch=sm_XX (Where XX is your GPU architecture version, for example, sm_61 for a Maxwell architecture).
+
+6. Create a CUDA Project
+Start a new Empty Project in Dev C++.
+
+Create a new source file (main.cpp or cuda_program.cu) and paste your CUDA code into it.
+
+7. Compile the Program
+Configure the compiler:
+
+Go to Tools > Compiler Options > Programs and under Linker, add:
+
+-lcudart (CUDA runtime library).
+
+-lcurand (if you are using random number generation).
+
+Change the file extension from .cpp to .cu because CUDA files must have the .cu extension.
+
+Compile the program:
+
+Press F9 or go to Execute > Compile.
+
+If everything is set up correctly, your program should compile without errors. If there are any errors, check the paths and compiler settings.
+
+8. Run the Program
+After successful compilation, you can run the program by pressing Ctrl + F10 or going to Execute > Run.
+
+9. Check for Errors
+If you run into errors, here are some common issues:
+
+Ensure that your GPU supports CUDA.
+
+Check if your environment variables (like CUDA_PATH) are set correctly.
+
+Make sure the correct version of the CUDA toolkit is being used.
+
+10. Optional: Install Visual Studio (for better integration)
+Even though Dev C++ can be used, Visual Studio has better integration with CUDA, such as easier debugging and faster compilation times. If you want to use Visual Studio instead of Dev C++:
+
+Download Visual Studio from here.
+
+During installation, ensure the Desktop development with C++ workload is selected.
+
+After installation, create a CUDA project directly in Visual Studio.
+
+##############Code##########
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cuda_runtime.h>
+
+#define N 512 // Size of the matrix (N x N)
+
+using namespace std;
+
+// CUDA kernel for matrix multiplication
+__global__ void matrixMultiply(int* A, int* B, int* C, int n) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // Row index
+    int col = blockIdx.x * blockDim.x + threadIdx.x; // Column index
+
+    if (row < n && col < n) {
+        int value = 0;
+        for (int i = 0; i < n; i++) {
+            value += A[row * n + i] * B[i * n + col];
+        }
+        C[row * n + col] = value;
+    }
+}
+
+// Function to initialize the matrix with random values
+void initMatrix(int* matrix, int n) {
+    for (int i = 0; i < n * n; i++) {
+        matrix[i] = rand() % 100;  // Random values between 0 and 99
+    }
+}
+
+// Function to print the matrix (only a subset to avoid large output)
+void printMatrix(int* matrix, int n) {
+    for (int i = 0; i < n && i < 10; i++) { // Print first 10 rows
+        for (int j = 0; j < n && j < 10; j++) { // Print first 10 columns
+            cout << matrix[i * n + j] << " ";
+        }
+        cout << endl;
+    }
+}
+
+int main() {
+    int *A, *B, *C;
+    int *d_A, *d_B, *d_C;
+    int size = N * N * sizeof(int);
+
+    // Allocate memory on the host (CPU)
+    A = (int*)malloc(size);
+    B = (int*)malloc(size);
+    C = (int*)malloc(size);
+
+    // Initialize matrices with random values
+    srand(time(0));  // Seed the random number generator
+    initMatrix(A, N);
+    initMatrix(B, N);
+
+    // Allocate memory on the device (GPU)
+    cudaMalloc((void**)&d_A, size);
+    cudaMalloc((void**)&d_B, size);
+    cudaMalloc((void**)&d_C, size);
+
+    // Copy matrices A and B from host to device
+    cudaMemcpy(d_A, A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, size, cudaMemcpyHostToDevice);
+
+    // Define block and grid size
+    dim3 threadsPerBlock(16, 16);  // 16x16 threads per block
+    dim3 numBlocks((N + 15) / 16, (N + 15) / 16);  // Grid size (ceil(N/16))
+
+    // Launch the kernel
+    matrixMultiply<<<numBlocks, threadsPerBlock>>>(d_A, d_B, d_C, N);
+
+    // Check for any errors during kernel launch
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        cout << "CUDA error: " << cudaGetErrorString(err) << endl;
+        return -1;
+    }
+
+    // Copy the result matrix C back from device to host
+    cudaMemcpy(C, d_C, size, cudaMemcpyDeviceToHost);
+
+    // Print the result (optional for large matrices)
+    cout << "Result Matrix (first 10x10 elements):" << endl;
+    printMatrix(C, N);
+
+    // Free allocated memory
+    free(A);
+    free(B);
+    free(C);
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    return 0;
+}
+
+##########################################################################################python###################
+!pip install pycuda
+import pycuda.driver as cuda
+import pycuda.autoinit
+from pycuda.compiler import SourceModule
+import numpy as np
+
+# Define 4x4 matrices A and B
+A = np.array([[1, 2, 3, 4],
+              [5, 6, 7, 8],
+              [9, 10, 11, 12],
+              [13, 14, 15, 16]], dtype=np.float32)
+
+B = np.array([[16, 15, 14, 13],
+              [12, 11, 10, 9],
+              [8, 7, 6, 5],
+              [4, 3, 2, 1]], dtype=np.float32)
+
+N = 4  # Matrix size
+C = np.empty((N, N), dtype=np.float32)  # Result matrix
+
+# CUDA kernel
+mod = SourceModule("""
+__global__ void matrix_multiply(float *A, float *B, float *C, int N) {
+    int row = threadIdx.y;
+    int col = threadIdx.x;
+
+    if (row < N && col < N) {
+        float value = 0;
+        for (int k = 0; k < N; ++k) {
+            value += A[row * N + k] * B[k * N + col];
+        }
+        C[row * N + col] = value;
+    }
+}
+""")
+
+# Allocate memory on GPU
+A_gpu = cuda.mem_alloc(A.nbytes)
+B_gpu = cuda.mem_alloc(B.nbytes)
+C_gpu = cuda.mem_alloc(C.nbytes)
+
+# Copy matrices from host to device
+cuda.memcpy_htod(A_gpu, A)
+cuda.memcpy_htod(B_gpu, B)
+
+# Launch the kernel with a 4x4 block
+matrix_multiply = mod.get_function("matrix_multiply")
+matrix_multiply(A_gpu, B_gpu, C_gpu, np.int32(N), block=(N, N, 1))
+
+# Copy result back from device to host
+cuda.memcpy_dtoh(C, C_gpu)
+
+# Print matrices
+print("Matrix A:")
+print(A)
+print("\nMatrix B:")
+print(B)
+print("\nMatrix C (A x B):")
+print(C)
+
+  #############################user input###################
+import pycuda.driver as cuda
+import pycuda.autoinit
+from pycuda.compiler import SourceModule
+import numpy as np
+
+# Function to get 4x4 matrix input from user
+def input_matrix(name):
+    print(f"Enter values for Matrix {name} (4x4):")
+    matrix = []
+    for i in range(4):
+        row = list(map(float, input(f"Row {i+1} (4 numbers separated by space): ").split()))
+        while len(row) != 4:
+            print("Please enter exactly 4 numbers.")
+            row = list(map(float, input(f"Row {i+1}: ").split()))
+        matrix.append(row)
+    return np.array(matrix, dtype=np.float32)
+
+# User input for matrices A and B
+A = input_matrix("A")
+B = input_matrix("B")
+
+N = 4
+C = np.empty((N, N), dtype=np.float32)
+
+# CUDA kernel
+mod = SourceModule("""
+__global__ void matrix_multiply(float *A, float *B, float *C, int N) {
+    int row = threadIdx.y;
+    int col = threadIdx.x;
+
+    if (row < N && col < N) {
+        float value = 0;
+        for (int k = 0; k < N; ++k) {
+            value += A[row * N + k] * B[k * N + col];
+        }
+        C[row * N + col] = value;
+    }
+}
+""")
+
+# Allocate GPU memory
+A_gpu = cuda.mem_alloc(A.nbytes)
+B_gpu = cuda.mem_alloc(B.nbytes)
+C_gpu = cuda.mem_alloc(C.nbytes)
+
+# Copy data to device
+cuda.memcpy_htod(A_gpu, A)
+cuda.memcpy_htod(B_gpu, B)
+
+# Launch kernel
+matrix_multiply = mod.get_function("matrix_multiply")
+matrix_multiply(A_gpu, B_gpu, C_gpu, np.int32(N), block=(N, N, 1))
+
+# Copy result to host
+cuda.memcpy_dtoh(C, C_gpu)
+
+# Display result
+print("\nMatrix A:")
+print(A)
+print("\nMatrix B:")
+print(B)
+print("\nMatrix C = A x B:")
+print(C)
